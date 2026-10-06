@@ -6,13 +6,14 @@ enum PairingLog {
         pattern: #"Resolved bonjour advert (\S+) to identity associated with udid (\S+)"#)
     private static let tunnelPredicate = #"process == "remotepairingd" AND (eventMessage CONTAINS "Got tunnel endpoint" OR eventMessage CONTAINS "Sending tunnel establish request")"#
 
-    /// Bonjour identifier -> UDID, as remotepairingd matched adverts against its pairings.
-    static func resolvedAdverts(last: String = "24h") -> [String: String] {
+    /// Bonjour identifier -> UDID, as remotepairingd matched adverts against its pairings,
+    /// with the position of the latest match (higher is more recent).
+    static func resolvedAdverts(last: String = "24h") -> [String: (udid: String, seen: Int)] {
         let out = Shell.run("/usr/bin/log", ["show", "--last", last, "--style", "compact", "--predicate",
                                              #"process == "remotepairingd" AND eventMessage CONTAINS "Resolved bonjour advert""#]).stdout
-        var map: [String: String] = [:]
-        for line in out.split(separator: "\n") {
-            if let groups = matches(resolvedPattern, String(line)) { map[groups[0]] = groups[1] }
+        var map: [String: (udid: String, seen: Int)] = [:]
+        for (index, line) in out.split(separator: "\n").enumerated() {
+            if let groups = matches(resolvedPattern, String(line)) { map[groups[0]] = (groups[1], index) }
         }
         return map
     }
@@ -31,7 +32,9 @@ enum PairingLog {
     /// Streams tunnel offers as remotepairingd logs them.
     static func followTunnels(queue: DispatchQueue, onTunnel: @escaping (_ udid: String, _ port: UInt16) -> Void) throws -> LineStream {
         var parser = TunnelLogParser()
-        return try LineStream("/usr/bin/log", ["stream", "--style", "compact", "--predicate", tunnelPredicate], queue: queue) { line in
+        // Through a pty so `log stream` writes each line as it happens instead of buffering.
+        return try LineStream("/usr/bin/script", ["-q", "/dev/null", "/usr/bin/log", "stream", "--style", "compact",
+                                                  "--predicate", tunnelPredicate], queue: queue) { line in
             if let (udid, port) = parser.feed(line) { onTunnel(udid, port) }
         }
     }
