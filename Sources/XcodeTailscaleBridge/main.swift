@@ -11,6 +11,7 @@ if CommandLine.arguments.contains("--capture") {
         for device in report.captured { print("Captured \(device.name) (\(device.udid)), Tailscale name \(device.tailscale)") }
         for host in report.notPaired { print("Skipped \(host): not paired with this Mac") }
         for name in report.missing { print("Not seen: \(name). Is it awake and on this network?") }
+        for name in report.conflicts { print("Skipped \(name): more than one device on this network claims to be it") }
         print("Devices file: \(DeviceStore.url.path)")
         exit(0)
     } catch {

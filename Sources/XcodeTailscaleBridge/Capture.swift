@@ -7,6 +7,8 @@ enum Capture {
         var captured: [Device] = []
         var notPaired: [String] = []
         var missing: [String] = []
+        /// Devices skipped because several adverts claimed to be them.
+        var conflicts: [String] = []
     }
 
     /// Blocks for about `seconds` plus resolve time; don't call on the main thread.
@@ -38,14 +40,29 @@ enum Capture {
             f.dateFormat = "yyyy-MM-dd HH:mm"
             return f.string(from: Date())
         }()
+        var claims: [String: [(name: String, record: BonjourResolver.Record)]] = [:]
         for (name, interfaceIndex) in names {
             guard let record = BonjourResolver.resolve(name: name, type: Bridge.serviceType,
                                                        interfaceIndex: interfaceIndex, timeout: 3),
                   !record.host.hasPrefix("tsrelay-") else { continue }
-            let identifier = record.txt["identifier"] ?? name
+            claims[record.txt["identifier"] ?? name, default: []].append((name, record))
+        }
+        var conflicted: Set<String> = []
+        for (identifier, candidates) in claims {
             guard let advert = adverts[identifier], let deviceName = paired[advert.udid] else {
-                report.notPaired.append(record.host)
+                report.notPaired += candidates.map(\.record.host)
                 continue
+            }
+            // Anyone on the network can copy a device's advert. A real device names its instance
+            // after its identifier, so if several adverts claim one identifier, only trust that one.
+            let trusted = candidates.count == 1 ? candidates : candidates.filter { $0.name == identifier }
+            guard trusted.count == 1, let (_, record) = trusted.first else {
+                Log.info("Capture: \(candidates.count) adverts claim to be \(deviceName) (\(identifier)); skipping")
+                conflicted.insert(advert.udid)
+                continue
+            }
+            if candidates.count > 1 {
+                Log.info("Capture: ignoring \(candidates.count - 1) other advert(s) claiming to be \(deviceName)")
             }
             let device = Device(udid: advert.udid, name: deviceName, tailscale: tailscaleLabel(for: deviceName),
                                 identifier: identifier, port: Int(record.port), txt: record.txt, captured: timestamp)
@@ -53,7 +70,8 @@ enum Capture {
             if (best[advert.udid]?.seen ?? -1) < advert.seen { best[advert.udid] = (device, advert.seen) }
         }
         report.captured = best.values.map(\.device).sorted { $0.name < $1.name }
-        report.missing = paired.filter { best[$0.key] == nil }.map(\.value).sorted()
+        report.conflicts = paired.filter { conflicted.contains($0.key) && best[$0.key] == nil }.map(\.value).sorted()
+        report.missing = paired.filter { best[$0.key] == nil && !conflicted.contains($0.key) }.map(\.value).sorted()
         if !report.captured.isEmpty { try DeviceStore.merge(report.captured) }
         for device in report.captured { Log.info("Captured \(device.name) (\(device.udid))") }
         return report

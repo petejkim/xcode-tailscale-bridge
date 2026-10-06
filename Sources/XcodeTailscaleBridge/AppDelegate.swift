@@ -210,6 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             alert.messageText = report.captured.isEmpty ? "No paired devices found" : "Captured \(report.captured.count) device(s)"
             var lines = report.captured.map { "✓ \($0.name) (Tailscale name: \($0.tailscale))" }
             lines += report.missing.map { "✗ \($0): not seen. Is it awake and on this network?" }
+            lines += report.conflicts.map { "⚠︎ \($0): skipped, because more than one device on this network claims to be it" }
             lines += report.notPaired.map { "– \($0): not paired with this Mac" }
             if !report.captured.isEmpty {
                 lines.append("\nWhen these devices are on another network, keep the bridge on and they'll appear in Xcode while they're online in Tailscale.")
