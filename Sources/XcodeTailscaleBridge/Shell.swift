@@ -49,13 +49,25 @@ enum Shell {
 /// Runs a long-lived command and delivers its stdout line by line.
 /// The command is stopped if this app dies, even from SIGKILL.
 final class LineStream {
+    /// macOS has no "kill me when my parent dies", so the command runs under a small shell
+    /// that polls for this app and stops the command once the app is gone. The shell starts
+    /// the command as its own child, so the PID it kills can't have been reused by an
+    /// unrelated process. Terminating the shell (`stop()`) stops the command too.
+    private static let supervisor = #"""
+        parent=$1; shift
+        "$@" & child=$!
+        ( while kill -0 "$parent" 2>/dev/null; do sleep 2; done; kill "$child" 2>/dev/null ) & watcher=$!
+        trap 'kill "$child" "$watcher" 2>/dev/null' TERM INT HUP
+        wait "$child"
+        kill "$watcher" 2>/dev/null
+        """#
+
     private let process = Process()
-    private let watchdog = Process()
     private var buffer = Data()
 
     init(_ path: String, _ arguments: [String], queue: DispatchQueue, onLine: @escaping (String) -> Void) throws {
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = arguments
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", Self.supervisor, "line-stream", String(getpid()), path] + arguments
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
         let out = Pipe()
@@ -77,21 +89,10 @@ final class LineStream {
             }
         }
         try process.run()
-
-        // macOS has no "kill me when my parent dies", so a tiny shell polls for this app
-        // and stops the command once it's gone.
-        watchdog.executableURL = URL(fileURLWithPath: "/bin/sh")
-        watchdog.arguments = ["-c", #"while kill -0 "$1" 2>/dev/null && kill -0 "$2" 2>/dev/null; do sleep 2; done; kill "$2" 2>/dev/null"#,
-                              "watchdog", String(getpid()), String(process.processIdentifier)]
-        watchdog.standardInput = FileHandle.nullDevice
-        watchdog.standardOutput = FileHandle.nullDevice
-        watchdog.standardError = FileHandle.nullDevice
-        try? watchdog.run()
     }
 
     func stop() {
         if process.isRunning { process.terminate() }
-        if watchdog.isRunning { watchdog.terminate() }
     }
 
     deinit { stop() }
