@@ -70,7 +70,12 @@ enum Tailscale {
     /// Nodes shared in from other tailnets are left out: their names aren't ours to trust.
     static func onlinePeers() throws -> [String: Peer] {
         guard let cli = cliPath else { throw BridgeError("Tailscale CLI not found. Is Tailscale installed?") }
-        let result = Shell.run(cli, ["status", "--json"])
+        // The Mac app's binary is both the GUI and the CLI, and without TERM it assumes it was
+        // opened as the GUI ("The Tailscale GUI failed to start"). Apps launched from Finder or
+        // the Dock have no TERM, so set one.
+        var environment = ProcessInfo.processInfo.environment
+        if environment["TERM"] == nil { environment["TERM"] = "dumb" }
+        let result = Shell.run(cli, ["status", "--json"], environment: environment)
         guard let json = try? JSONSerialization.jsonObject(with: Data(result.stdout.utf8)) as? [String: Any] else {
             let output = (result.stderr.isEmpty ? result.stdout : result.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
             throw BridgeError("tailscale status failed (exit \(result.status)): \(output.isEmpty ? "no output" : String(output.prefix(200)))")
