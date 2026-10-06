@@ -132,7 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if deviceStatus.tailscaleIP != nil { return ("waiting for Xcode", .systemYellow) }
             return ("offline in Tailscale", .tertiaryLabelColor)
         }()
-        let title = "\(device.name) — \(label)"
+        let title = "\(device.name.displaySafe) — \(label)"
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.attributedTitle = statusTitle(title, color: color)
 
@@ -208,10 +208,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             alert.informativeText = error.localizedDescription
         case .success(let report):
             alert.messageText = report.captured.isEmpty ? "No paired devices found" : "Captured \(report.captured.count) device(s)"
-            var lines = report.captured.map { "✓ \($0.name) (Tailscale name: \($0.tailscale))" }
-            lines += report.missing.map { "✗ \($0): not seen. Is it awake and on this network?" }
-            lines += report.conflicts.map { "⚠︎ \($0): skipped, because more than one device on this network claims to be it" }
-            lines += report.notPaired.map { "– \($0): not paired with this Mac" }
+            var lines = report.captured.map { "✓ \($0.name.displaySafe) (Tailscale name: \($0.tailscale))" }
+            lines += report.missing.map { "✗ \($0.displaySafe): not seen. Is it awake and on this network?" }
+            lines += report.conflicts.map { "⚠︎ \($0.displaySafe): skipped, because more than one device on this network claims to be it" }
+            lines += report.notPaired.map { "– \($0.displaySafe): not paired with this Mac" }
             if !report.captured.isEmpty {
                 lines.append("\nWhen these devices are on another network, keep the bridge on and they'll appear in Xcode while they're online in Tailscale.")
             }
@@ -246,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func removeDevice(_ sender: NSMenuItem) {
         guard let device = sender.representedObject as? Device else { return }
         let alert = NSAlert()
-        alert.messageText = "Remove \(device.name)?"
+        alert.messageText = "Remove \(device.name.displaySafe)?"
         alert.informativeText = "The bridge will stop advertising it. To add it back, capture it again on its network."
         alert.addButton(withTitle: "Remove")
         alert.addButton(withTitle: "Cancel")

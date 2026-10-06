@@ -16,7 +16,8 @@ enum Log {
     static func info(_ message: String) {
         let date = Date()
         queue.async {
-            let line = Data("\(formatter.string(from: date)) \(message)\n".utf8)
+            // One line per entry, so names from devices or the network can't forge extra lines.
+            let line = Data("\(formatter.string(from: date)) \(message.singleLine)\n".utf8)
             FileHandle.standardError.write(line)
             let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
             if size > maxSize || !FileManager.default.fileExists(atPath: url.path) {

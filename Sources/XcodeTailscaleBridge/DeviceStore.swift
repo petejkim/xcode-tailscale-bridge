@@ -23,7 +23,7 @@ struct Device: Codable, Equatable {
         if udid.isEmpty || udid.utf8.count > 64 { return "bad UDID" }
         if !(1...65535).contains(port) { return "port \(port) out of range" }
         if identifier.isEmpty || identifier.utf8.count > 63 { return "bad Bonjour identifier" }
-        if !isDNSLabel(tailscale) { return "bad Tailscale name \"\(tailscale)\"" }
+        if !isDNSLabel(tailscale) { return "bad Tailscale name \"\(tailscale.displaySafe)\"" }
         if txt.contains(where: { $0.key.isEmpty || $0.key.contains("=") || "\($0.key)=\($0.value)".utf8.count > 255 }) {
             return "bad TXT record"
         }
@@ -63,9 +63,9 @@ enum DeviceStore {
         var problems: [String] = []
         for device in all {
             if let problem = device.problem {
-                problems.append("skipping device \"\(device.name)\": \(problem)")
+                problems.append("skipping device \"\(device.name.displaySafe)\": \(problem)")
             } else if devices.count >= maxDevices {
-                problems.append("skipping device \"\(device.name)\": more than \(maxDevices) devices")
+                problems.append("skipping device \"\(device.name.displaySafe)\": more than \(maxDevices) devices")
             } else if !devices.contains(where: { $0.udid == device.udid }) {
                 devices.append(device)
             }
@@ -115,7 +115,7 @@ enum DeviceStore {
         } catch {
             throw BridgeError("\(source.lastPathComponent) isn't a devices.json file.")
         }
-        let problems = imported.compactMap { device in device.problem.map { "\(device.name): \($0)" } }
+        let problems = imported.compactMap { device in device.problem.map { "\(device.name.displaySafe): \($0)" } }
         guard problems.isEmpty else {
             throw BridgeError("\(source.lastPathComponent) has invalid entries:\n" + problems.joined(separator: "\n"))
         }

@@ -6,6 +6,27 @@ struct BridgeError: LocalizedError {
     var errorDescription: String? { message }
 }
 
+extension String {
+    /// For showing text that came from outside the app (device names, hosts on the network,
+    /// devices.json) on one line: control characters become spaces, and bidirectional
+    /// overrides, which can make text display in a misleading order, are removed.
+    var singleLine: String {
+        let bidiControls: Set<UInt32> = [0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+                                         0x2066, 0x2067, 0x2068, 0x2069]
+        var result = String.UnicodeScalarView()
+        for scalar in unicodeScalars where !bidiControls.contains(scalar.value) {
+            result.append(scalar.properties.generalCategory == .control ? " " : scalar)
+        }
+        return String(result)
+    }
+
+    /// `singleLine`, shortened for menus and alerts.
+    var displaySafe: String {
+        let line = singleLine
+        return line.count > 80 ? line.prefix(79) + "…" : line
+    }
+}
+
 enum Shell {
     struct Result {
         let status: Int32
