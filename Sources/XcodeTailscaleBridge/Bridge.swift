@@ -127,10 +127,8 @@ final class Bridge {
             let slot = Slot(device: device, controlPort: Self.controlPortBase + UInt16(index))
             slots[device.udid] = slot
             order.append(device.udid)
-            listen(on: slot.controlPort) { [weak self] connection in
-                self?.forward(connection, udid: device.udid, remotePort: UInt16(device.port), kind: .control)
-            }
         }
+        listenForControl()
         state = .running
         Log.info("Bridge started on \(interface) (\(ip)) with \(devices.count) device(s)")
         publish()
@@ -194,6 +192,7 @@ final class Bridge {
             tearDown()
             setUp()
         } else {
+            listenForControl()
             pollTailscale()
         }
     }
@@ -245,10 +244,25 @@ final class Bridge {
 
     // MARK: Relaying
 
+    /// Listens on each device's control port; retried every tick in case a listener failed.
+    private func listenForControl() {
+        for udid in order {
+            guard let slot = slots[udid] else { continue }
+            let device = slot.device
+            listen(on: slot.controlPort) { [weak self] connection in
+                self?.forward(connection, udid: device.udid, remotePort: UInt16(device.port), kind: .control)
+            }
+        }
+    }
+
     private func listen(on port: UInt16, onConnection: @escaping (NWConnection) -> Void) {
         guard listeners[port] == nil, let localIP else { return }
+        let generation = self.generation
         do {
-            listeners[port] = try PortListener(ip: localIP, port: port, queue: queue, onConnection: onConnection)
+            listeners[port] = try PortListener(ip: localIP, port: port, queue: queue, onConnection: onConnection) { [weak self] in
+                guard let self, generation == self.generation else { return }
+                self.listeners[port] = nil
+            }
         } catch {
             Log.info("[\(port)] listen failed: \(error.localizedDescription)")
         }

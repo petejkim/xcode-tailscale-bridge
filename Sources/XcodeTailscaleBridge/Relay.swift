@@ -5,15 +5,19 @@ import Network
 final class PortListener {
     private let listener: NWListener
 
-    init(ip: String, port: UInt16, queue: DispatchQueue, onConnection: @escaping (NWConnection) -> Void) throws {
+    init(ip: String, port: UInt16, queue: DispatchQueue, onConnection: @escaping (NWConnection) -> Void,
+         onFailure: @escaping () -> Void) throws {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(ip), port: NWEndpoint.Port(rawValue: port)!)
+        // Don't fail on connections from a previous run still in TIME_WAIT.
+        parameters.allowLocalEndpointReuse = true
         listener = try NWListener(using: parameters)
         listener.newConnectionHandler = onConnection
         listener.stateUpdateHandler = { [listener] state in
             if case .failed(let error) = state {
                 Log.info("[\(port)] listen failed: \(error)")
                 listener.cancel()
+                onFailure()
             }
         }
         listener.start(queue: queue)
