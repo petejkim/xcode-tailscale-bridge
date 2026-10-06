@@ -99,16 +99,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let capture = item(capturing ? "Capturing…" : "Capture Devices on This Network…", #selector(captureDevices))
         capture.isEnabled = !capturing
         menu.addItem(capture)
-        menu.addItem(item("Import devices.json…", #selector(importDevices)))
+        menu.addItem(.separator())
 
-        let troubleshooting = NSMenuItem(title: "Troubleshooting", action: nil, keyEquivalent: "")
+        let advanced = NSMenuItem(title: "Advanced", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         submenu.autoenablesItems = false
+        submenu.addItem(item("Import devices.json…", #selector(importDevices)))
+        submenu.addItem(.separator())
         submenu.addItem(item("Restart Pairing Service", #selector(restartPairingService)))
         submenu.addItem(item("Show Log", #selector(showLog)))
         submenu.addItem(item("Show Devices File", #selector(showDevicesFile)))
-        troubleshooting.submenu = submenu
-        menu.addItem(troubleshooting)
+        advanced.submenu = submenu
+        menu.addItem(advanced)
 
         let login = item("Launch at Login", #selector(toggleLaunchAtLogin))
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -127,11 +129,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if deviceStatus.tailscaleIP != nil { return ("waiting for Xcode", .systemYellow) }
             return ("offline in Tailscale", .tertiaryLabelColor)
         }()
-        let item = NSMenuItem(title: "\(device.name) — \(label)", action: nil, keyEquivalent: "")
-        let dot = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: label)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 8, weight: .regular)
-                .applying(NSImage.SymbolConfiguration(paletteColors: [color])))
-        item.image = dot
+        let title = "\(device.name) — \(label)"
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.attributedTitle = statusTitle(title, color: color)
 
         let submenu = NSMenu()
         submenu.autoenablesItems = false
@@ -147,6 +147,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         submenu.addItem(remove)
         item.submenu = submenu
         return item
+    }
+
+    /// A device row's title, prefixed with a dot in its status colour. The dot is text rather
+    /// than the item's image because status menus don't reliably show item images.
+    private func statusTitle(_ title: String, color: NSColor) -> NSAttributedString {
+        let font = NSFont.menuFont(ofSize: 0)
+        let text = NSMutableAttributedString(string: "●\u{2002}", attributes: [.foregroundColor: color, .font: font])
+        text.append(NSAttributedString(string: title, attributes: [.font: font]))
+        return text
     }
 
     private func item(_ title: String, _ action: Selector, key: String = "") -> NSMenuItem {
