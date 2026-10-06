@@ -59,19 +59,31 @@ enum Tailscale {
         candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    /// Tailscale DNS label -> Tailscale IP (IPv4 preferred) for every online peer.
-    static func onlinePeers() throws -> [String: String] {
+    struct Peer {
+        /// Tailscale IP, IPv4 preferred.
+        let ip: String
+        /// Stable node ID, which survives renames and IP changes.
+        let nodeID: String
+    }
+
+    /// Tailscale DNS label -> peer, for every online peer in this Mac's own tailnet.
+    /// Nodes shared in from other tailnets are left out: their names aren't ours to trust.
+    static func onlinePeers() throws -> [String: Peer] {
         guard let cli = cliPath else { throw BridgeError("Tailscale CLI not found. Is Tailscale installed?") }
         let result = Shell.run(cli, ["status", "--json"])
-        guard let json = try? JSONSerialization.jsonObject(with: Data(result.stdout.utf8)) as? [String: Any] else {
+        guard let json = try? JSONSerialization.jsonObject(with: Data(result.stdout.utf8)) as? [String: Any],
+              let suffix = json["MagicDNSSuffix"] as? String, !suffix.isEmpty else {
             throw BridgeError("tailscale status failed: \(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
-        var online: [String: String] = [:]
+        var online: [String: Peer] = [:]
         for case let peer as [String: Any] in (json["Peer"] as? [String: Any] ?? [:]).values {
-            guard peer["Online"] as? Bool == true,
+            guard peer["Online"] as? Bool == true, peer["ShareeNode"] as? Bool != true,
+                  let nodeID = peer["ID"] as? String, !nodeID.isEmpty,
                   let ips = peer["TailscaleIPs"] as? [String], let first = ips.first,
-                  let label = (peer["DNSName"] as? String)?.split(separator: ".").first else { continue }
-            online[String(label)] = ips.first { $0.contains(".") } ?? first
+                  let dnsName = peer["DNSName"] as? String, dnsName.hasSuffix(".\(suffix).") else { continue }
+            let label = String(dnsName.dropLast(suffix.count + 2))
+            guard !label.isEmpty, !label.contains(".") else { continue }
+            online[label] = Peer(ip: ips.first { $0.contains(".") } ?? first, nodeID: nodeID)
         }
         return online
     }

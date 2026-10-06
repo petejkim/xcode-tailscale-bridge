@@ -6,6 +6,9 @@ struct Device: Codable, Equatable {
     var name: String
     /// Tailscale DNS label: the first part of `name.tailXXXX.ts.net`.
     var tailscale: String
+    /// Stable ID of the Tailscale node first seen under that name. A different node taking
+    /// the name later isn't trusted. Cleared by capturing the device again.
+    var tailscaleNodeID: String?
     /// Bonjour instance name / TXT `identifier` of the captured record.
     var identifier: String
     /// Port of the device's pairing service.
@@ -32,7 +35,17 @@ enum DeviceStore {
         try encoder.encode(sorted).write(to: url, options: .atomic)
     }
 
+    /// Remembers which Tailscale node a device was first seen as.
+    static func pin(udid: String, nodeID: String) throws {
+        try save(load().map { device in
+            var device = device
+            if device.udid == udid { device.tailscaleNodeID = nodeID }
+            return device
+        })
+    }
+
     /// Adds or replaces devices by UDID, keeping a hand-edited `tailscale` label.
+    /// The Tailscale node pin is reset, so a recaptured device can be trusted on a new node.
     static func merge(_ new: [Device]) throws {
         var byUDID = Dictionary(load().map { ($0.udid, $0) }, uniquingKeysWith: { $1 })
         for var device in new {

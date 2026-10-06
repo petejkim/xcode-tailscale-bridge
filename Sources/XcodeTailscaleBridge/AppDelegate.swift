@@ -126,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let device = deviceStatus.device
         let (label, color): (String, NSColor) = {
             guard status.state == .running else { return ("bridge off", .tertiaryLabelColor) }
+            if let problem = deviceStatus.problem { return (problem, .systemRed) }
             if deviceStatus.tunnelConnections > 0 { return ("connected", .systemGreen) }
             if deviceStatus.controlConnections > 0 { return ("available", .systemBlue) }
             if deviceStatus.tailscaleIP != nil { return ("waiting for Xcode", .systemYellow) }
@@ -140,6 +141,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         submenu.addItem(disabled("Tailscale: \(device.tailscale)\(deviceStatus.tailscaleIP.map { " (\($0))" } ?? "")"))
         submenu.addItem(disabled("UDID: \(device.udid)"))
         submenu.addItem(disabled("Captured: \(device.captured)"))
+        if deviceStatus.problem != nil {
+            submenu.addItem(disabled("A different Tailscale node is using this name."))
+            submenu.addItem(disabled("If that's this device, capture it again to trust it."))
+        }
         submenu.addItem(.separator())
         let copy = self.item("Copy UDID", #selector(copyUDID(_:)))
         copy.representedObject = device.udid

@@ -29,6 +29,8 @@ final class Bridge {
         let tailscaleIP: String?
         let controlConnections: Int
         let tunnelConnections: Int
+        /// Why the device can't be used, e.g. a different Tailscale node took its name.
+        var problem: String? = nil
     }
 
     struct Status {
@@ -45,9 +47,10 @@ final class Bridge {
     private enum Kind { case control, tunnel }
 
     private final class Slot {
-        let device: Device
+        var device: Device
         let controlPort: UInt16
         var ip: String?
+        var problem: String?
         var advertisement: ProxyAdvertisement?
         var controlConnections = 0
         var tunnelConnections = 0
@@ -262,11 +265,11 @@ final class Bridge {
         }
     }
 
-    private func apply(online: [String: String]) {
+    private func apply(online: [String: Tailscale.Peer]) {
         guard let interface, let localIP else { return }
         for udid in order {
             guard let slot = slots[udid] else { continue }
-            let ip = online[slot.device.tailscale]
+            let ip = trustedIP(for: slot, peer: online[slot.device.tailscale])
             slot.ip = ip
             if let ip, slot.advertisement == nil {
                 do {
@@ -284,6 +287,34 @@ final class Bridge {
                 Log.info("\(slot.device.name) went offline; stopped advertising")
             }
         }
+    }
+
+    /// The peer's IP if it's the node this device was first seen as. The first match is
+    /// remembered; a different node later using the same name is refused.
+    private func trustedIP(for slot: Slot, peer: Tailscale.Peer?) -> String? {
+        guard let peer else {
+            slot.problem = nil
+            return nil
+        }
+        if let pinned = slot.device.tailscaleNodeID, pinned != peer.nodeID {
+            if slot.problem == nil {
+                Log.info("\(slot.device.name): Tailscale node \(peer.nodeID) is using the name \(slot.device.tailscale), "
+                         + "but the device was seen as node \(pinned). Not relaying to it. Capture the device again to trust the new node.")
+            }
+            slot.problem = "Tailscale node changed"
+            return nil
+        }
+        slot.problem = nil
+        if slot.device.tailscaleNodeID == nil {
+            slot.device.tailscaleNodeID = peer.nodeID
+            do {
+                try DeviceStore.pin(udid: slot.device.udid, nodeID: peer.nodeID)
+                Log.info("\(slot.device.name): trusting Tailscale node \(peer.nodeID)")
+            } catch {
+                Log.info("\(slot.device.name): can't save Tailscale node: \(error.localizedDescription)")
+            }
+        }
+        return peer.ip
     }
 
     // MARK: Relaying
@@ -398,8 +429,8 @@ final class Bridge {
     private func publish() {
         var status = Status(state: state, interface: interface, localIP: localIP, warning: warning)
         status.devices = order.compactMap { slots[$0] }.map {
-            DeviceStatus(device: $0.device, tailscaleIP: $0.ip,
-                         controlConnections: $0.controlConnections, tunnelConnections: $0.tunnelConnections)
+            DeviceStatus(device: $0.device, tailscaleIP: $0.ip, controlConnections: $0.controlConnections,
+                         tunnelConnections: $0.tunnelConnections, problem: $0.problem)
         }
         if state != .running { status.devices = DeviceStore.load().map { DeviceStatus(device: $0, tailscaleIP: nil, controlConnections: 0, tunnelConnections: 0) } }
         DispatchQueue.main.async { self.onChange?(status) }

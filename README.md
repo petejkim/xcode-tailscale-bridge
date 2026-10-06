@@ -96,6 +96,7 @@ So the app:
 
 - **Only this Mac can use the relay.** The relay listens on the Mac's LAN address, because that's where Xcode's pairing service connects. It refuses any connection that doesn't come from the Mac itself, so other machines on your network can't reach your devices through it.
 - **The announcement is visible on your local network.** Xcode only accepts the device's Bonjour announcement on a real network interface, so other machines on the same network can see it: a `_remotepairing._tcp` service at `tsrelay-<this Mac's local hostname>-<port>.local`, with the device's current pairing identifier. Only Macs already paired with the device can tell which device it is, and they can't connect through the relay. Keeping the announcement from leaving the Mac would need a firewall rule and administrator rights. On an untrusted network, turn the bridge off when you're not using it.
+- **Devices are tied to their Tailscale node.** A device is only matched to a node in your own tailnet, never to one shared in from another tailnet. The first node seen under the device's name is remembered, and if a different node later takes that name (for example after the phone leaves the tailnet), the bridge refuses to relay to it and the menu shows **Tailscale node changed**. If the new node really is the device (say, Tailscale was reinstalled on it), capture the device again.
 - **Pairing still protects the device.** The relay passes the traffic through unchanged. The device's pairing protocol still verifies this Mac's pairing keys and encrypts the tunnel.
 
 ## Troubleshooting
@@ -110,6 +111,7 @@ So the app:
 - **"devicectl not found":** the app also looks in `/Applications/Xcode*.app`. Otherwise run `sudo xcode-select -s /Applications/Xcode.app`.
 - **Capture finds nothing:** the device has to be awake and on the same network as the Mac.
 - **Device never shows up:** check that the `tailscale` field in the devices file matches the device's name in `tailscale status`.
+- **"Tailscale node changed":** a different Tailscale node than before is using the device's name, so the bridge won't relay to it. If it's the same device on a new node, capture it again.
 
 ## Limitations
 

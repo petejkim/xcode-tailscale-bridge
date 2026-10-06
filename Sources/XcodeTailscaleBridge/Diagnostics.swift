@@ -8,7 +8,7 @@ enum Diagnostics {
         print("Tailscale CLI: \(Tailscale.cliPath ?? "not found")")
         do {
             let peers = try Tailscale.onlinePeers()
-            print("Online Tailscale peers: \(peers.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))")
+            print("Online Tailscale peers: \(peers.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value.ip)" }.joined(separator: ", "))")
         } catch {
             print("Tailscale: \(error.localizedDescription)")
         }
