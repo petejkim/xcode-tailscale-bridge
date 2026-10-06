@@ -11,3 +11,5 @@ Icon[]
 docs/private
 DerivedData/
 *.xcresult/
+
+build/
