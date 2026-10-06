@@ -78,13 +78,34 @@ enum Tailscale {
 }
 
 enum LocalNetwork {
+    /// Which network the Mac is on. Two Wi-Fi networks can hand out the same IP,
+    /// so the router's address is part of it too.
+    struct Identity: Equatable {
+        let interface: String
+        let ip: String
+        let router: String?
+    }
+
+    static func current() -> Identity? {
+        guard let interface = primaryInterface(), let ip = ipv4Address(of: interface) else { return nil }
+        return Identity(interface: interface, ip: ip, router: globalIPv4()?["Router"] as? String)
+    }
+
     /// The interface carrying the default route, ignoring tunnels (e.g. a Tailscale exit node).
     static func primaryInterface() -> String? {
-        guard let store = SCDynamicStoreCreate(nil, "XcodeTailscaleBridge" as CFString, nil, nil),
-              let state = SCDynamicStoreCopyValue(store, "State:/Network/Global/IPv4" as CFString) as? [String: Any],
-              let name = state["PrimaryInterface"] as? String else { return nil }
+        guard let name = globalIPv4()?["PrimaryInterface"] as? String else { return nil }
         if name.hasPrefix("utun") { return ipv4Address(of: "en0") != nil ? "en0" : nil }
         return name
+    }
+
+    /// This Mac's Bonjour host name (System Settings → General → Sharing → Local hostname).
+    static func localHostName() -> String {
+        (SCDynamicStoreCopyLocalHostName(nil) as String?) ?? "mac"
+    }
+
+    private static func globalIPv4() -> [String: Any]? {
+        guard let store = SCDynamicStoreCreate(nil, "XcodeTailscaleBridge" as CFString, nil, nil) else { return nil }
+        return SCDynamicStoreCopyValue(store, "State:/Network/Global/IPv4" as CFString) as? [String: Any]
     }
 
     static func ipv4Address(of interface: String) -> String? {

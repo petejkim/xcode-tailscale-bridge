@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Network
 
 /// Makes captured devices available to Xcode while they're online in Tailscale.
@@ -14,6 +14,8 @@ final class Bridge {
     static let controlPortBase: UInt16 = 42000
     static let lookahead: UInt16 = 20
     static let pollInterval: TimeInterval = 15
+    /// How long to let the network settle after a change before checking it.
+    static let networkSettleDelay: TimeInterval = 2
     static let serviceType = "_remotepairing._tcp"
 
     enum State: Equatable {
@@ -59,8 +61,9 @@ final class Bridge {
     private let queue = DispatchQueue(label: "bridge")
     private var enabled = false
     private var state = State.stopped
-    private var interface: String?
-    private var localIP: String?
+    private var network: LocalNetwork.Identity?
+    private var interface: String? { network?.interface }
+    private var localIP: String? { network?.ip }
     private var warning: String?
     private var slots: [String: Slot] = [:]
     private var order: [String] = []
@@ -70,6 +73,9 @@ final class Bridge {
     private var forwarders: [ObjectIdentifier: Forwarder] = [:]
     private var follower: LineStream?
     private var timer: DispatchSourceTimer?
+    private var pathMonitor: NWPathMonitor?
+    private var pendingNetworkCheck: DispatchWorkItem?
+    private var wakeObserver: NSObjectProtocol?
     /// Bumped on every teardown so late async results from a previous run are ignored.
     private var generation = 0
 
@@ -79,6 +85,7 @@ final class Bridge {
         queue.async {
             self.enabled = true
             self.startTimer()
+            self.startWatchingNetwork()
             self.setUp()
         }
     }
@@ -88,6 +95,7 @@ final class Bridge {
             self.enabled = false
             self.timer?.cancel()
             self.timer = nil
+            self.stopWatchingNetwork()
             self.tearDown()
             self.state = .stopped
             self.publish()
@@ -108,6 +116,7 @@ final class Bridge {
         queue.sync {
             self.enabled = false
             self.timer?.cancel()
+            self.stopWatchingNetwork()
             self.tearDown()
         }
     }
@@ -115,13 +124,13 @@ final class Bridge {
     // MARK: Lifecycle
 
     private func setUp() {
-        guard let interface = LocalNetwork.primaryInterface(), let ip = LocalNetwork.ipv4Address(of: interface) else {
+        guard let network = LocalNetwork.current() else {
             state = .failed("No network connection")
             publish()
             return
         }
-        self.interface = interface
-        localIP = ip
+        self.network = network
+        let (interface, ip) = (network.interface, network.ip)
         let devices = DeviceStore.load()
         for (index, device) in devices.enumerated() {
             let slot = Slot(device: device, controlPort: Self.controlPortBase + UInt16(index))
@@ -167,8 +176,7 @@ final class Bridge {
         window = [:]
         owner = [:]
         forwarders = [:]
-        interface = nil
-        localIP = nil
+        network = nil
         warning = nil
     }
 
@@ -181,13 +189,49 @@ final class Bridge {
         self.timer = timer
     }
 
+    /// Reacts to network changes within a few seconds instead of waiting for the next tick.
+    private func startWatchingNetwork() {
+        guard pathMonitor == nil else { return }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] _ in self?.scheduleNetworkCheck() }
+        monitor.start(queue: queue)
+        pathMonitor = monitor
+        // Relayed connections don't survive sleep, so start fresh on wake.
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: nil) { [weak self] _ in
+            guard let self else { return }
+            self.queue.asyncAfter(deadline: .now() + Self.networkSettleDelay) {
+                guard self.enabled else { return }
+                Log.info("Woke from sleep; restarting")
+                self.tearDown()
+                self.setUp()
+            }
+        }
+    }
+
+    private func stopWatchingNetwork() {
+        pathMonitor?.cancel()
+        pathMonitor = nil
+        pendingNetworkCheck?.cancel()
+        pendingNetworkCheck = nil
+        if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
+        wakeObserver = nil
+    }
+
+    /// Path updates come in bursts while an interface comes up, so wait for them to settle.
+    private func scheduleNetworkCheck() {
+        pendingNetworkCheck?.cancel()
+        let check = DispatchWorkItem { [weak self] in self?.tick() }
+        pendingNetworkCheck = check
+        queue.asyncAfter(deadline: .now() + Self.networkSettleDelay, execute: check)
+    }
+
     private func tick() {
         guard enabled else { return }
-        let interface = LocalNetwork.primaryInterface()
-        let ip = interface.flatMap(LocalNetwork.ipv4Address(of:))
+        let current = LocalNetwork.current()
         if case .failed = state {
-            if ip != nil { tearDown(); setUp() }
-        } else if interface != self.interface || ip != localIP {
+            if current != nil { tearDown(); setUp() }
+        } else if current != network {
             Log.info("Network changed; restarting")
             tearDown()
             setUp()
@@ -228,7 +272,7 @@ final class Bridge {
                 do {
                     slot.advertisement = try ProxyAdvertisement(
                         instance: slot.device.identifier, type: Self.serviceType, port: slot.controlPort,
-                        host: "tsrelay-\(slot.controlPort).local", ipv4: localIP, txt: slot.device.txt,
+                        host: "tsrelay-\(tailscaleLabel(for: LocalNetwork.localHostName()))-\(slot.controlPort).local", ipv4: localIP, txt: slot.device.txt,
                         interface: interface, queue: queue)
                     Log.info("\(slot.device.name) online at \(ip); advertising")
                 } catch {
