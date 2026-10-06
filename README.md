@@ -111,6 +111,7 @@ So the app:
 - **"devicectl not found":** the app also looks in `/Applications/Xcode*.app`. Otherwise run `sudo xcode-select -s /Applications/Xcode.app`.
 - **Capture finds nothing:** the device has to be awake and on the same network as the Mac.
 - **Device never shows up:** check that the `tailscale` field in the devices file matches the device's name in `tailscale status`.
+- **A device is missing from the menu:** entries in the devices file that aren't valid (for example a hand-edit with a bad port or Tailscale name) are skipped. **Advanced → Show Log** says which, and why.
 - **"Tailscale node changed":** a different Tailscale node than before is using the device's name, so the bridge won't relay to it. If it's the same device on a new node, capture it again.
 
 ## Limitations

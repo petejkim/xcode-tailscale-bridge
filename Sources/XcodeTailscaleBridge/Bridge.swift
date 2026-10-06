@@ -135,6 +135,7 @@ final class Bridge {
         self.network = network
         let (interface, ip) = (network.interface, network.ip)
         let devices = DeviceStore.load()
+        for problem in DeviceStore.problems() { Log.info(problem) }
         for (index, device) in devices.enumerated() {
             let slot = Slot(device: device, controlPort: Self.controlPortBase + UInt16(index))
             slots[device.udid] = slot

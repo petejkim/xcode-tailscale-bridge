@@ -16,15 +16,61 @@ struct Device: Codable, Equatable {
     /// TXT record of the captured `_remotepairing._tcp` advert (identifier, authTag, ...).
     var txt: [String: String]
     var captured: String
+
+    /// Why this entry can't be used, or nil if it's valid. devices.json can be hand-edited
+    /// or imported, so nothing in it is trusted.
+    var problem: String? {
+        if udid.isEmpty || udid.utf8.count > 64 { return "bad UDID" }
+        if !(1...65535).contains(port) { return "port \(port) out of range" }
+        if identifier.isEmpty || identifier.utf8.count > 63 { return "bad Bonjour identifier" }
+        if !isDNSLabel(tailscale) { return "bad Tailscale name \"\(tailscale)\"" }
+        if txt.contains(where: { $0.key.isEmpty || $0.key.contains("=") || "\($0.key)=\($0.value)".utf8.count > 255 }) {
+            return "bad TXT record"
+        }
+        return nil
+    }
+}
+
+/// A lowercase DNS label, as Tailscale uses in its names.
+private func isDNSLabel(_ label: String) -> Bool {
+    guard (1...63).contains(label.utf8.count), !label.hasPrefix("-"), !label.hasSuffix("-") else { return false }
+    return label.unicodeScalars.allSatisfy { ("a"..."z").contains($0) || ("0"..."9").contains($0) || $0 == "-" }
 }
 
 enum DeviceStore {
     static let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("XcodeTailscaleBridge/devices.json")
 
+    /// Each device gets its own local port, so keep the count well within range.
+    static let maxDevices = 100
+
+    /// The usable devices; invalid entries are left out (see `problems()`).
     static func load() -> [Device] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([Device].self, from: data)) ?? []
+        loadChecked().devices
+    }
+
+    /// Descriptions of entries in devices.json that `load()` leaves out.
+    static func problems() -> [String] {
+        loadChecked().problems
+    }
+
+    private static func loadChecked() -> (devices: [Device], problems: [String]) {
+        guard let data = try? Data(contentsOf: url) else { return ([], []) }
+        guard let all = try? JSONDecoder().decode([Device].self, from: data) else {
+            return ([], ["\(url.lastPathComponent) can't be read as a list of devices"])
+        }
+        var devices: [Device] = []
+        var problems: [String] = []
+        for device in all {
+            if let problem = device.problem {
+                problems.append("skipping device \"\(device.name)\": \(problem)")
+            } else if devices.count >= maxDevices {
+                problems.append("skipping device \"\(device.name)\": more than \(maxDevices) devices")
+            } else if !devices.contains(where: { $0.udid == device.udid }) {
+                devices.append(device)
+            }
+        }
+        return (devices, problems)
     }
 
     static func save(_ devices: [Device]) throws {
@@ -59,13 +105,29 @@ enum DeviceStore {
         try save(load().filter { $0.udid != udid })
     }
 
-    /// Imports a devices.json written by another copy of this app.
+    /// Imports a devices.json written by another copy of this app. The whole file is rejected
+    /// if any entry is invalid. Devices already here keep their Tailscale name and node, and
+    /// imported devices are re-tied to a node the first time they're seen.
     static func importFile(at source: URL) throws -> Int {
-        let devices = try JSONDecoder().decode([Device].self, from: Data(contentsOf: source))
+        let imported: [Device]
+        do {
+            imported = try JSONDecoder().decode([Device].self, from: Data(contentsOf: source))
+        } catch {
+            throw BridgeError("\(source.lastPathComponent) isn't a devices.json file.")
+        }
+        let problems = imported.compactMap { device in device.problem.map { "\(device.name): \($0)" } }
+        guard problems.isEmpty else {
+            throw BridgeError("\(source.lastPathComponent) has invalid entries:\n" + problems.joined(separator: "\n"))
+        }
         var byUDID = Dictionary(load().map { ($0.udid, $0) }, uniquingKeysWith: { $1 })
-        for device in devices { byUDID[device.udid] = device }
+        for var device in imported {
+            device.tailscaleNodeID = byUDID[device.udid]?.tailscaleNodeID
+            if let existing = byUDID[device.udid] { device.tailscale = existing.tailscale }
+            byUDID[device.udid] = device
+        }
+        guard byUDID.count <= maxDevices else { throw BridgeError("That would be more than \(maxDevices) devices.") }
         try save(Array(byUDID.values))
-        return devices.count
+        return imported.count
     }
 }
 
