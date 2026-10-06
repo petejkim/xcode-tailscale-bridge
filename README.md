@@ -88,6 +88,12 @@ So the app:
 
 **Cleanup on exit:** quitting, or a SIGTERM, withdraws the announcements and closes every relayed connection. Even after a force quit (SIGKILL), the system's Bonjour daemon drops the announcements as soon as the app's connection to it closes. The app's helper `log stream` process stops itself within a few seconds.
 
+## Security
+
+- **Only this Mac can use the relay.** The relay listens on the Mac's LAN address, because that's where Xcode's pairing service connects. It refuses any connection that doesn't come from the Mac itself, so other machines on your network can't reach your devices through it.
+- **The announcement is visible on your local network.** Xcode only accepts the device's Bonjour announcement on a real network interface, so other machines on the same network can see it: a `_remotepairing._tcp` service at `tsrelay-<port>.local`, with the device's current pairing identifier. Only Macs already paired with the device can tell which device it is, and they can't connect through the relay. Keeping the announcement from leaving the Mac would need a firewall rule and administrator rights. On an untrusted network, turn the bridge off when you're not using it.
+- **Pairing still protects the device.** The relay passes the traffic through unchanged. The device's pairing protocol still verifies this Mac's pairing keys and encrypts the tunnel.
+
 ## Troubleshooting
 
 - **Device stays "waiting for Xcode" or unavailable:**
