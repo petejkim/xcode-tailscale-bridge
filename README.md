@@ -12,7 +12,7 @@ Xcode's wireless debugging only finds devices on the same local network as the M
 
 - **Mac:** macOS 14 or later, with Xcode installed.
 - **Tailscale:** installed and connected on both the Mac and the iOS device.
-- **Pairing:** the device must already be paired with this Mac for wireless debugging. Pair it once over USB or on the same network: Xcode → Window → Devices and Simulators, with **Connect via network** turned on.
+- **Pairing:** each device must be paired with this Mac for wireless debugging. See step 1 of [Usage](#usage).
 
 ## Build and install
 
@@ -36,8 +36,9 @@ Both build from the same sources in `Sources/XcodeTailscaleBridge/`. The Xcode p
 
 ## Usage
 
-1. **Capture each device once.** With the device on the **same network** as the Mac and awake, choose **Capture Devices on This Network…** from the menu. This saves the device's pairing record, which Xcode needs to recognise it. Do it once per device, and again after re-pairing.
-2. **Leave the bridge on.** When the device is on any other network and online in Tailscale, it appears in Xcode within about 15 seconds. The menu shows each device's status:
+1. **Pair each device with this Mac.** Connect the device over USB, or put it on the same network as the Mac, and pair it in **Device Hub** (**Xcode → Open Developer Tool → Device Hub**; **Window → Devices and Simulators** in Xcode 26 and earlier), with **Connect via network** turned on. You only need to do this once.
+2. **Capture each device once.** With the device on the **same network** as the Mac and awake, choose **Capture Devices on This Network…** from the menu. This saves the device's pairing record, which Xcode needs to recognise it. Do it once per device, and again after re-pairing.
+3. **Leave the bridge on.** When the device is on any other network and online in Tailscale, it appears in Xcode within about 15 seconds. The menu shows each device's status:
 
    | Status | Meaning |
    |---|---|
@@ -52,7 +53,7 @@ Both build from the same sources in `Sources/XcodeTailscaleBridge/`. The Xcode p
 
 - **Device ▸ Remove Device…:** stops advertising a device.
 - **Turn Bridge On / Off:** remembered across launches.
-- **Capture Devices on This Network…:** see step 1 above.
+- **Capture Devices on This Network…:** see step 2 above.
 - **Advanced:**
   - **Import devices.json…:** imports devices captured by another copy of this app, for example on another Mac.
   - **Restart Pairing Service:** restarts Xcode's `remotepairingd` and `CoreDeviceService`, which clears a device stuck in reconnect backoff.
