@@ -44,15 +44,15 @@ Both build from the same sources in `Sources/XcodeTailscaleBridge/`. The Xcode p
    | 🔵 available | Xcode is connected to the device's pairing service |
    | 🟢 connected | Xcode has a tunnel to the device (installing, debugging, …) |
 
-**Matching devices to Tailscale:** each device is looked up in Tailscale by its device name, lowercased with every other character replaced by `-` ("My iPhone 16" → `my-iphone-16`). If the device has a different name in Tailscale, use **Troubleshooting → Show Devices File** and set that device's `tailscale` field to its name in `tailscale status`.
+**Matching devices to Tailscale:** each device is looked up in Tailscale by its device name, lowercased with every other character replaced by `-` ("My iPhone 16" → `my-iphone-16`). If the device has a different name in Tailscale, use **Advanced → Show Devices File** and set that device's `tailscale` field to its name in `tailscale status`.
 
 ### Menu reference
 
+- **Device ▸ Remove Device…:** stops advertising a device.
 - **Turn Bridge On / Off:** remembered across launches.
 - **Capture Devices on This Network…:** see step 1 above.
-- **Import devices.json…:** imports devices captured by another copy of this app, for example on another Mac.
-- **Device ▸ Remove Device…:** stops advertising a device.
-- **Troubleshooting:**
+- **Advanced:**
+  - **Import devices.json…:** imports devices captured by another copy of this app, for example on another Mac.
   - **Restart Pairing Service:** restarts Xcode's `remotepairingd` and `CoreDeviceService`, which clears a device stuck in reconnect backoff.
   - **Show Log:** opens `~/Library/Logs/XcodeTailscaleBridge.log`.
   - **Show Devices File:** reveals `~/Library/Application Support/XcodeTailscaleBridge/devices.json`.
@@ -98,7 +98,7 @@ So the app:
 
 - **Device stays "waiting for Xcode" or unavailable:**
   - Check that you allowed incoming connections. Look in System Settings → Network → Firewall → Options.
-  - Try **Troubleshooting → Restart Pairing Service**.
+  - Try **Advanced → Restart Pairing Service**.
 - **"tracking as unauth device" in `remotepairingd`'s log:** the captured record is no longer accepted, usually after re-pairing. Capture the device again on its network. To view the log (in zsh, `log` is a builtin, so use the full path):
   ```sh
   /usr/bin/log show --last 5m --style compact --predicate 'process == "remotepairingd"'
