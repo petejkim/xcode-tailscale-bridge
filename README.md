@@ -14,15 +14,23 @@ Xcode's wireless debugging only finds devices on the same local network as the M
 
 ## Build and install
 
+**In Xcode:** open `XcodeTailscaleBridge.xcodeproj` and press Run (⌘R). The project is set to "Sign to Run Locally", so it builds without an Apple Developer account. To sign with your own team, change it under the target's Signing & Capabilities.
+
+**From the command line:**
+
 ```sh
 git clone https://github.com/petejkim/xcode-tailscale-bridge.git && cd xcode-tailscale-bridge
-scripts/build-app.sh
+scripts/build-app.sh            # universal Release build into build/
 open "build/Xcode Tailscale Bridge.app"
 ```
 
-To keep it, move the app to `/Applications`. `scripts/build-app.sh debug` makes a debug build.
+`scripts/build-app.sh debug` makes a debug build. To keep the app, move it to `/Applications`.
 
-**The first time** the app runs, macOS asks whether to **allow incoming connections**. Click **Allow**: the app relays Xcode's connections through local ports. If you click Deny, the device stays unavailable in Xcode. You may be asked again after rebuilding the app.
+**With SwiftPM:** `swift build` and `swift run XcodeTailscaleBridge --run` also work, for quick command-line builds. That produces a bare executable rather than an app bundle, so use the Xcode project or the script for the menu bar app.
+
+Both build from the same sources in `Sources/XcodeTailscaleBridge/`. The Xcode project picks up new files there automatically.
+
+**The first time** the app runs, macOS asks whether to **allow incoming connections**. Click **Allow**: the app relays Xcode's connections through local ports. If you click Deny, the device stays unavailable in Xcode. You may be asked again after rebuilding, because the app is signed only for this Mac.
 
 ## Usage
 
@@ -55,7 +63,7 @@ To keep it, move the app to `/Applications`. `scripts/build-app.sh debug` makes 
 The app's binary has three headless modes, useful over SSH or for debugging:
 
 ```sh
-B="build/Xcode Tailscale Bridge.app/Contents/MacOS/XcodeTailscaleBridge"
+B="build/Xcode Tailscale Bridge.app/Contents/MacOS/Xcode Tailscale Bridge"
 "$B" --capture     # capture devices on this network
 "$B" --run         # run the bridge without the menu bar item (Ctrl-C to stop)
 "$B" --diagnose    # print what the app can see: interface, Tailscale peers, paired devices, captured devices
