@@ -20,7 +20,7 @@ final class PortListener {
         listener.newConnectionHandler = { connection in
             guard case .hostPort(let host, _) = connection.endpoint, case .ipv4(let address) = host,
                   address.rawValue == localAddress?.rawValue else {
-                Log.info("[\(port)] refused connection from \(connection.endpoint): not from this Mac")
+                RefusalLog.note(from: connection.endpoint, port: port)
                 connection.cancel()
                 return
             }
@@ -37,6 +37,35 @@ final class PortListener {
     }
 
     func cancel() { listener.cancel() }
+}
+
+/// Logs refused connections without flooding the log. Another Mac on the network that's
+/// paired with the same device sees the advert and retries every few seconds, so only the
+/// first refusal from each address is logged, then a count at most every 10 minutes.
+enum RefusalLog {
+    private static let interval: TimeInterval = 600
+    private static let queue = DispatchQueue(label: "refusal-log")
+    private static var sources: [String: (lastLogged: Date, unlogged: Int)] = [:]
+
+    static func note(from endpoint: NWEndpoint, port: UInt16) {
+        let address: String
+        if case .hostPort(let host, _) = endpoint { address = "\(host)" } else { address = "\(endpoint)" }
+        queue.async {
+            let now = Date()
+            guard let source = sources[address] else {
+                sources[address] = (now, 0)
+                Log.info("[\(port)] refused connection from \(address): not from this Mac. "
+                         + "Further refusals from it are counted every 10 minutes.")
+                return
+            }
+            if now.timeIntervalSince(source.lastLogged) >= interval {
+                Log.info("Refused \(source.unlogged + 1) more connection(s) from \(address) since the last report")
+                sources[address] = (now, 0)
+            } else {
+                sources[address] = (source.lastLogged, source.unlogged + 1)
+            }
+        }
+    }
 }
 
 /// Pipes one accepted connection to a remote host and port, in both directions.
