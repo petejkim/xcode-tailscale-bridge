@@ -2,6 +2,10 @@ import Foundation
 import Network
 
 /// Listens on one local IP and port and hands each accepted connection to `onConnection`.
+///
+/// The IP is this Mac's LAN address, so other machines on the network could connect too.
+/// Only connections from this Mac itself (where remotepairingd runs) are accepted; anything
+/// else would otherwise be relayed to the device over Tailscale.
 final class PortListener {
     private let listener: NWListener
 
@@ -12,7 +16,16 @@ final class PortListener {
         // Don't fail on connections from a previous run still in TIME_WAIT.
         parameters.allowLocalEndpointReuse = true
         listener = try NWListener(using: parameters)
-        listener.newConnectionHandler = onConnection
+        let localAddress = IPv4Address(ip)
+        listener.newConnectionHandler = { connection in
+            guard case .hostPort(let host, _) = connection.endpoint, case .ipv4(let address) = host,
+                  address.rawValue == localAddress?.rawValue else {
+                Log.info("[\(port)] refused connection from \(connection.endpoint): not from this Mac")
+                connection.cancel()
+                return
+            }
+            onConnection(connection)
+        }
         listener.stateUpdateHandler = { [listener] state in
             if case .failed(let error) = state {
                 Log.info("[\(port)] listen failed: \(error)")
