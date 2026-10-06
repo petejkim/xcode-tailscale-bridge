@@ -1,5 +1,10 @@
 import AppKit
 
+if CommandLine.arguments.contains("--diagnose") {
+    Diagnostics.run()
+    exit(0)
+}
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
