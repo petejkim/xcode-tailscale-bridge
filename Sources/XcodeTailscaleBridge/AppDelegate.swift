@@ -109,6 +109,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         submenu.addItem(item("Restart Pairing Service", #selector(restartPairingService)))
         submenu.addItem(item("Show Log", #selector(showLog)))
         submenu.addItem(item("Show Devices File", #selector(showDevicesFile)))
+        submenu.addItem(.separator())
+        submenu.addItem(item("About Xcode Tailscale Bridge", #selector(showAbout)))
         advanced.submenu = submenu
         menu.addItem(advanced)
 
@@ -258,6 +260,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func showLog() {
         if !FileManager.default.fileExists(atPath: Log.url.path) { Log.info("Log opened") }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { NSWorkspace.shared.open(Log.url) }
+    }
+
+    private static let projectURL = URL(string: "https://github.com/petejkim/xcode-tailscale-bridge")!
+
+    /// The standard About panel: icon, name, version and copyright come from the bundle,
+    /// plus a link to the project as the credits.
+    @objc private func showAbout() {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let credits = NSAttributedString(string: "github.com/petejkim/xcode-tailscale-bridge", attributes: [
+            .link: Self.projectURL,
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .paragraphStyle: paragraph,
+        ])
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
     }
 
     @objc private func showDevicesFile() {

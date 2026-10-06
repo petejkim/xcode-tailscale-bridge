@@ -56,6 +56,7 @@ Both build from the same sources in `Sources/XcodeTailscaleBridge/`. The Xcode p
   - **Restart Pairing Service:** restarts Xcode's `remotepairingd` and `CoreDeviceService`, which clears a device stuck in reconnect backoff.
   - **Show Log:** opens `~/Library/Logs/XcodeTailscaleBridge.log`.
   - **Show Devices File:** reveals `~/Library/Application Support/XcodeTailscaleBridge/devices.json`.
+  - **About Xcode Tailscale Bridge:** shows the version, the copyright and a link to the project on GitHub.
 - **Launch at Login:** available when running from the `.app`.
 
 ### Command line

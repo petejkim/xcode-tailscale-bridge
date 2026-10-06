@@ -24,6 +24,8 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Pete Kim. MIT License.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Xcode Tailscale Bridge advertises your iOS devices to Xcode on this Mac and relays their connections over Tailscale.</string>
 	<key>NSBonjourServices</key>
