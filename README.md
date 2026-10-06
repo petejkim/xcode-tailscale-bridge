@@ -1,5 +1,7 @@
 # Xcode Tailscale Bridge
 
+<img src="docs/icon.png" width="128" height="128" alt="Xcode Tailscale Bridge app icon">
+
 A small macOS menu bar app that lets Xcode use your iPhone or iPad wirelessly **from a different network**, over [Tailscale](https://tailscale.com).
 
 Xcode's wireless debugging only finds devices on the same local network as the Mac. That rules out a Mac VM in NAT mode, a build machine in another room or office, or a phone that's simply on a different Wi-Fi or on cellular. If the Mac and the device are both on your tailnet, this app makes the device show up in Xcode as if it were on the same network. You can then build, install, run and debug as usual.
