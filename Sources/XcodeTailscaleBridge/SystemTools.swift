@@ -71,9 +71,12 @@ enum Tailscale {
     static func onlinePeers() throws -> [String: Peer] {
         guard let cli = cliPath else { throw BridgeError("Tailscale CLI not found. Is Tailscale installed?") }
         let result = Shell.run(cli, ["status", "--json"])
-        guard let json = try? JSONSerialization.jsonObject(with: Data(result.stdout.utf8)) as? [String: Any],
-              let suffix = json["MagicDNSSuffix"] as? String, !suffix.isEmpty else {
-            throw BridgeError("tailscale status failed: \(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))")
+        guard let json = try? JSONSerialization.jsonObject(with: Data(result.stdout.utf8)) as? [String: Any] else {
+            let output = (result.stderr.isEmpty ? result.stdout : result.stderr).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw BridgeError("tailscale status failed (exit \(result.status)): \(output.isEmpty ? "no output" : String(output.prefix(200)))")
+        }
+        guard let suffix = json["MagicDNSSuffix"] as? String, !suffix.isEmpty else {
+            throw BridgeError("tailscale status has no tailnet name (state: \(json["BackendState"] as? String ?? "unknown"))")
         }
         var online: [String: Peer] = [:]
         for case let peer as [String: Any] in (json["Peer"] as? [String: Any] ?? [:]).values {
