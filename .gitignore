@@ -1,0 +1,13 @@
+.DS_Store
+.localized
+__MACOSX/
+.AppleDouble
+.LSOverride
+Icon[]
+._*
+
+**/xcuserdata/
+.build/
+docs/private
+DerivedData/
+*.xcresult/
