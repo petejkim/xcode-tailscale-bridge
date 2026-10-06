@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let bridge = Bridge()
     private var status = Bridge.Status()
     private var capturing = false
+    private var terminationSource: DispatchSourceSignal?
 
     private var bridgeEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: Self.enabledKey) }
@@ -18,6 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: [Self.enabledKey: true])
+        // Quit normally on SIGTERM (kill, logout) so applicationWillTerminate cleans up.
+        signal(SIGTERM, SIG_IGN)
+        terminationSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        terminationSource?.setEventHandler { NSApp.terminate(nil) }
+        terminationSource?.resume()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu.delegate = self
         menu.autoenablesItems = false

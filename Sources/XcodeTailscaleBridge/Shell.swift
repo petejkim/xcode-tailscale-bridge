@@ -47,8 +47,10 @@ enum Shell {
 }
 
 /// Runs a long-lived command and delivers its stdout line by line.
+/// The command is stopped if this app dies, even from SIGKILL.
 final class LineStream {
     private let process = Process()
+    private let watchdog = Process()
     private var buffer = Data()
 
     init(_ path: String, _ arguments: [String], queue: DispatchQueue, onLine: @escaping (String) -> Void) throws {
@@ -75,10 +77,21 @@ final class LineStream {
             }
         }
         try process.run()
+
+        // macOS has no "kill me when my parent dies", so a tiny shell polls for this app
+        // and stops the command once it's gone.
+        watchdog.executableURL = URL(fileURLWithPath: "/bin/sh")
+        watchdog.arguments = ["-c", #"while kill -0 "$1" 2>/dev/null && kill -0 "$2" 2>/dev/null; do sleep 2; done; kill "$2" 2>/dev/null"#,
+                              "watchdog", String(getpid()), String(process.processIdentifier)]
+        watchdog.standardInput = FileHandle.nullDevice
+        watchdog.standardOutput = FileHandle.nullDevice
+        watchdog.standardError = FileHandle.nullDevice
+        try? watchdog.run()
     }
 
     func stop() {
         if process.isRunning { process.terminate() }
+        if watchdog.isRunning { watchdog.terminate() }
     }
 
     deinit { stop() }

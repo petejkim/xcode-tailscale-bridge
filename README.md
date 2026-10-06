@@ -78,6 +78,8 @@ So the app:
 - **Follows the tunnel ports.** It watches `remotepairingd`'s log for the tunnel port each device offers, and listens on the next 20 ports ahead of time to relay them too.
 - **Tracks Tailscale.** It checks `tailscale status` every 15 seconds and only advertises devices that are online. It restarts itself when the Mac's network changes.
 
+**Cleanup on exit:** quitting, or a SIGTERM, withdraws the announcements and closes every relayed connection. Even after a force quit (SIGKILL), the system's Bonjour daemon drops the announcements as soon as the app's connection to it closes. The app's helper `log stream` process stops itself within a few seconds.
+
 ## Troubleshooting
 
 - **Device stays "waiting for Xcode" or unavailable:**
