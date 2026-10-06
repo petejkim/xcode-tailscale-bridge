@@ -4,13 +4,18 @@ import Foundation
 enum PairingLog {
     private static let resolvedPattern = try! NSRegularExpression(
         pattern: #"Resolved bonjour advert (\S+) to identity associated with udid (\S+)"#)
-    private static let tunnelPredicate = #"process == "remotepairingd" AND (eventMessage CONTAINS "Got tunnel endpoint" OR eventMessage CONTAINS "Sending tunnel establish request")"#
+    /// Only the real remotepairingd, which lives under SIP-protected /Library/Apple. Matching
+    /// by process name alone would trust any local program named "remotepairingd".
+    private static let fromRemotePairingd =
+        #"processImagePath BEGINSWITH "/Library/Apple/System/Library/PrivateFrameworks/RemotePairing.framework/""#
+    private static let tunnelPredicate = fromRemotePairingd
+        + #" AND (eventMessage CONTAINS "Got tunnel endpoint" OR eventMessage CONTAINS "Sending tunnel establish request")"#
 
     /// Bonjour identifier -> UDID, as remotepairingd matched adverts against its pairings,
     /// with the position of the latest match (higher is more recent).
     static func resolvedAdverts(last: String = "24h") -> [String: (udid: String, seen: Int)] {
         let out = Shell.run("/usr/bin/log", ["show", "--last", last, "--style", "compact", "--predicate",
-                                             #"process == "remotepairingd" AND eventMessage CONTAINS "Resolved bonjour advert""#]).stdout
+                                             fromRemotePairingd + #" AND eventMessage CONTAINS "Resolved bonjour advert""#]).stdout
         var map: [String: (udid: String, seen: Int)] = [:]
         for (index, line) in out.split(separator: "\n").enumerated() {
             if let groups = matches(resolvedPattern, String(line)) { map[groups[0]] = (groups[1], index) }
